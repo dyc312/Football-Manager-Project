@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>比赛详情</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/index.html">英超赛事信息管理系统</a>
+  <a href="/index.html">球队</a>
+  <a href="/players.html">球员</a>
+  <a href="/matches.html">赛程赛果</a>
+  <a href="/standings.html">积分榜</a>
+  <a href="/scorers.html">射手榜</a>
+  <a href="/player_stats.html">球员统计</a>
+</nav>
+<main class="container">
+  <div id="notice"></div>
+  <section id="matchCard" class="card"></section>
+
+  <h2 class="section-title">比赛事件时间线</h2>
+  <div id="events"></div>
+
+  <h2 class="section-title">出场记录</h2>
+  <div id="appearances" class="table-wrap"></div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+const matchId = Number(queryParam("id"));
+
+async function loadPage() {
+  const notice = document.getElementById("notice");
+  if (!matchId) {
+    showNotice(notice, "缺少比赛ID", "error");
+    return;
+  }
+
+  try {
+    const [match, events, appearances] = await Promise.all([
+      api(`/matches/${matchId}`),
+      api(`/matches/${matchId}/events`),
+      api(`/matches/${matchId}/appearances`),
+    ]);
+
+    document.title = `${match.home_team_name} vs ${match.away_team_name}`;
+    document.getElementById("matchCard").innerHTML = `
+      <div class="match-hero">
+        <div>
+          <h2>${escapeHtml(match.home_team_name)}</h2>
+          <a href="/team_detail.html?id=${match.home_team_id}">球队主页</a>
+        </div>
+        <div>
+          <div class="score">${match.home_score} : ${match.away_score}</div>
+          <div>${statusBadge(match.status)}</div>
+        </div>
+        <div>
+          <h2>${escapeHtml(match.away_team_name)}</h2>
+          <a href="/team_detail.html?id=${match.away_team_id}">球队主页</a>
+        </div>
+      </div>
+      <p style="text-align:center">第 ${match.round_no} 轮 · ${formatDate(match.match_date)}</p>
+      <p class="small" style="text-align:center">比分由进球、点球和乌龙球事件自动计算。</p>
+    `;
+
+    if (!events.length) {
+      document.getElementById("events").innerHTML =
+        '<div class="notice info">该比赛暂无事件。</div>';
+    } else {
+      document.getElementById("events").innerHTML = `
+        <ul class="timeline">
+          ${events.map(e => `
+            <li class="${escapeHtml(e.event_type)}">
+              ${eventLabel(e)} · ${escapeHtml(e.team_name)}
+            </li>
+          `).join("")}
+        </ul>
+      `;
+    }
+
+    document.getElementById("appearances").innerHTML = `
+      <table>
+        <thead>
+          <tr><th>球队</th><th>球员</th><th>首发</th><th>上场</th><th>下场</th></tr>
+        </thead>
+        <tbody>
+          ${appearances.map(a => `
+            <tr>
+              <td>${escapeHtml(a.team_name)}</td>
+              <td>${escapeHtml(a.player_name)}</td>
+              <td>${a.is_starting ? "是" : "否"}</td>
+              <td>${a.minute_on}'</td>
+              <td>${a.minute_off}'</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  } catch (error) {
+    showNotice(notice, error.message, "error");
+  }
+}
+loadPage();
+</script>
+</body>
+</html>

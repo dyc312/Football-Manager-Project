@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>积分榜</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/index.html">英超赛事信息管理系统</a>
+  <a href="/index.html">球队</a>
+  <a href="/players.html">球员</a>
+  <a href="/matches.html">赛程赛果</a>
+  <a href="/standings.html">积分榜</a>
+  <a href="/scorers.html">射手榜</a>
+  <a href="/player_stats.html">球员统计</a>
+</nav>
+<main class="container">
+  <h1 class="page-title">积分榜</h1>
+  <p class="subtitle">胜3分、平1分、负0分；依次按积分、净胜球、进球数排序。</p>
+  <div id="notice"></div>
+  <div id="table" class="table-wrap"></div>
+</main>
+<script src="/common.js"></script>
+<script>
+async function loadStandings() {
+  try {
+    const rows = await api("/standings");
+    document.getElementById("table").innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th><th>球队</th><th>场次</th><th>胜</th><th>平</th><th>负</th>
+            <th>进球</th><th>失球</th><th>净胜球</th><th>积分</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r, i) => `
+            <tr class="${i < 3 ? `rank-${i + 1}` : ""}">
+              <td>${r.rank_no}</td>
+              <td><a href="/team_detail.html?id=${r.team_id}"><strong>${escapeHtml(r.team_name)}</strong></a></td>
+              <td>${r.played}</td><td>${r.win}</td><td>${r.draw}</td><td>${r.loss}</td>
+              <td>${r.goals_for}</td><td>${r.goals_against}</td><td>${r.goal_diff}</td>
+              <td><strong>${r.points}</strong></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  } catch (error) {
+    showNotice(document.getElementById("notice"), error.message, "error");
+  }
+}
+loadStandings();
+</script>
+</body>
+</html>

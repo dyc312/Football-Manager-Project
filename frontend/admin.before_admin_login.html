@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>后台管理</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/index.html">英超赛事信息管理系统</a>
+  <a href="/index.html">球队</a>
+  <a href="/players.html">球员</a>
+  <a href="/matches.html">赛程赛果</a>
+  <a href="/standings.html">积分榜</a>
+  <a href="/scorers.html">射手榜</a>
+  <a href="/player_stats.html">球员统计</a>
+</nav>
+<main class="container">
+  <h1 class="page-title">后台管理</h1>
+  <p class="subtitle">所有写操作均需要管理员密钥；比赛比分由事件自动计算，不能手工录入。</p>
+
+  <section class="card">
+    <div class="toolbar">
+      <div class="field grow">
+        <label>管理员密钥</label>
+        <input id="adminKey" type="password" placeholder="默认本地演示：admin123">
+      </div>
+      <button onclick="saveKey()">保存密钥</button>
+      <button class="secondary" onclick="recalculate()">全量重算统计</button>
+    </div>
+    <div id="globalNotice"></div>
+  </section>
+
+  <div class="admin-grid">
+    <section class="card">
+      <h2>赛季管理</h2>
+      <input id="seasonId" type="hidden">
+      <div class="field"><label>赛季名称</label><input id="seasonName"></div>
+      <div class="field"><label>开始日期</label><input id="seasonStart" type="date"></div>
+      <div class="field"><label>结束日期</label><input id="seasonEnd" type="date"></div>
+      <div class="form-actions">
+        <button onclick="saveSeason()">保存</button>
+        <button class="secondary" onclick="resetSeason()">清空</button>
+      </div>
+      <div id="seasonList"></div>
+    </section>
+
+    <section class="card">
+      <h2>赛事管理</h2>
+      <input id="tournamentId" type="hidden">
+      <div class="field"><label>赛事名称</label><input id="tournamentName"></div>
+      <div class="field"><label>组织方</label><input id="organizer"></div>
+      <div class="form-actions">
+        <button onclick="saveTournament()">保存</button>
+        <button class="secondary" onclick="resetTournament()">清空</button>
+      </div>
+      <div id="tournamentList"></div>
+    </section>
+
+    <section class="card">
+      <h2>球队管理</h2>
+      <input id="teamId" type="hidden">
+      <div class="field"><label>球队名称</label><input id="teamName"></div>
+      <div class="field"><label>城市</label><input id="teamCity"></div>
+      <div class="field"><label>主教练</label><input id="teamCoach"></div>
+      <div class="form-actions">
+        <button onclick="saveTeam()">保存</button>
+        <button class="secondary" onclick="resetTeam()">清空</button>
+      </div>
+      <div id="teamList"></div>
+    </section>
+
+    <section class="card">
+      <h2>球员管理</h2>
+      <input id="playerId" type="hidden">
+      <div class="field"><label>球队</label><select id="playerTeam"></select></div>
+      <div class="field"><label>球员姓名</label><input id="playerName"></div>
+      <div class="field"><label>号码</label><input id="playerNumber" type="number" min="1" max="99"></div>
+      <div class="field">
+        <label>位置</label>
+        <select id="playerPosition">
+          <option value="Goalkeeper">门将</option>
+          <option value="Defender">后卫</option>
+          <option value="Midfielder">中场</option>
+          <option value="Forward">前锋</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button onclick="savePlayer()">保存</button>
+        <button class="secondary" onclick="resetPlayer()">清空</button>
+      </div>
+      <div id="playerList"></div>
+    </section>
+
+    <section class="card">
+      <h2>比赛管理</h2>
+      <input id="matchId" type="hidden">
+      <div class="field"><label>赛季</label><select id="matchSeason"></select></div>
+      <div class="field"><label>赛事</label><select id="matchTournament"></select></div>
+      <div class="field"><label>轮次</label><input id="matchRound" type="number" min="1"></div>
+      <div class="field"><label>比赛时间</label><input id="matchDate" type="datetime-local"></div>
+      <div class="field"><label>主队</label><select id="homeTeam"></select></div>
+      <div class="field"><label>客队</label><select id="awayTeam"></select></div>
+      <div class="field">
+        <label>状态</label>
+        <select id="matchStatus">
+          <option value="scheduled">未开始</option>
+          <option value="live">进行中</option>
+          <option value="finished">已结束</option>
+          <option value="postponed">延期</option>
+          <option value="cancelled">取消</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button onclick="saveMatch()">保存</button>
+        <button class="secondary" onclick="resetMatch()">清空</button>
+      </div>
+      <div id="matchList"></div>
+    </section>
+
+    <section class="card">
+      <h2>比赛事件管理</h2>
+      <input id="eventId" type="hidden">
+      <div class="field"><label>比赛</label><select id="eventMatch" onchange="refreshEventPlayers()"></select></div>
+      <div class="field"><label>主要球员</label><select id="eventPlayer"></select></div>
+      <div class="field"><label>相关球员（助攻/换上）</label><select id="relatedPlayer"><option value="">无</option></select></div>
+      <div class="field">
+        <label>事件类型</label>
+        <select id="eventType">
+          <option value="goal">普通进球</option>
+          <option value="penalty_goal">点球进球</option>
+          <option value="own_goal">乌龙球</option>
+          <option value="yellow_card">黄牌</option>
+          <option value="red_card">红牌</option>
+          <option value="substitution">换人</option>
+        </select>
+      </div>
+      <div class="field"><label>分钟</label><input id="eventMinute" type="number" min="0" max="130"></div>
+      <div class="field"><label>补时分钟</label><input id="eventStoppage" type="number" min="0" max="20" value="0"></div>
+      <div class="form-actions">
+        <button onclick="saveEvent()">保存</button>
+        <button class="secondary" onclick="resetEvent()">清空</button>
+      </div>
+      <div id="eventList"></div>
+    </section>
+
+    <section class="card">
+      <h2>出场记录管理</h2>
+      <input id="appearanceId" type="hidden">
+      <div class="field"><label>比赛</label><select id="appearanceMatch" onchange="refreshAppearancePlayers()"></select></div>
+      <div class="field"><label>球员</label><select id="appearancePlayer"></select></div>
+      <div class="field">
+        <label>是否首发</label>
+        <select id="isStarting"><option value="1">是</option><option value="0">否</option></select>
+      </div>
+      <div class="field"><label>上场分钟</label><input id="minuteOn" type="number" min="0" max="130" value="0"></div>
+      <div class="field"><label>下场分钟</label><input id="minuteOff" type="number" min="0" max="130" value="90"></div>
+      <div class="form-actions">
+        <button onclick="saveAppearance()">保存</button>
+        <button class="secondary" onclick="resetAppearance()">清空</button>
+      </div>
+      <div id="appearanceList"></div>
+    </section>
+  </div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+let seasons = [];
+let tournaments = [];
+let teams = [];
+let players = [];
+let matches = [];
+const dataPanelIds = [
+  "seasonList",
+  "tournamentList",
+  "teamList",
+  "playerList",
+  "matchList",
+  "eventList",
+  "appearanceList",
+];
+
+const dataPanelSearchPlaceholders = {
+  seasonList: "搜索赛季名称、日期",
+  tournamentList: "搜索赛事、组织方",
+  teamList: "搜索球队、城市、教练",
+  playerList: "搜索球队、号码、球员、位置",
+  matchList: "搜索轮次、球队、时间、比分",
+  eventList: "搜索时间、球员、事件类型",
+  appearanceList: "搜索球队、球员、上下场时间",
+};
+
+const PANEL_ROW_LIMIT = 80;
+
+function normalizeSearchText(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function panelKeyword(id) {
+  const input = document.getElementById(`${id}Search`);
+  return normalizeSearchText(input ? input.value : "");
+}
+
+function rowText(values) {
+  return normalizeSearchText(values.filter(v => v !== null && v !== undefined).join(" "));
+}
+
+function setPanelCount(id, total, matched, shown) {
+  const countLabel = document.querySelector(`[data-count-for="${id}"]`);
+  if (!countLabel) return;
+
+  const keyword = panelKeyword(id);
+  if (matched > shown) {
+    countLabel.textContent = keyword
+      ? `匹配 ${matched}/${total}，显示前 ${shown} 条`
+      : `共 ${total} 条，显示前 ${shown} 条`;
+  } else {
+    countLabel.textContent = keyword ? `匹配 ${matched}/${total}` : `共 ${total} 条`;
+  }
+}
+
+function filteredRows(id, rows, textFn) {
+  const keyword = panelKeyword(id);
+  const matchedRows = keyword
+    ? rows.filter(row => normalizeSearchText(textFn(row)).includes(keyword))
+    : rows.slice();
+
+  const shownRows = matchedRows.slice(0, PANEL_ROW_LIMIT);
+  setPanelCount(id, rows.length, matchedRows.length, shownRows.length);
+
+  return {
+    shownRows,
+    total: rows.length,
+    matched: matchedRows.length,
+    shown: shownRows.length,
+  };
+}
+
+function tableMessageRow(colCount, message) {
+  return `<tr class="admin-filter-empty"><td colspan="${colCount}">${message}</td></tr>`;
+}
+
+function tailMessage(id, colCount, meta) {
+  if (meta.matched === 0) return tableMessageRow(colCount, "没有匹配的数据");
+  if (meta.matched > meta.shown) {
+    return tableMessageRow(colCount, `数据较多，为防止页面卡顿，仅显示前 ${meta.shown} 条；请继续输入关键词缩小范围。`);
+  }
+  return "";
+}
+
+function refreshDataPanel(id) {
+  const renderers = {
+    seasonList: renderSeasons,
+    tournamentList: renderTournaments,
+    teamList: renderTeams,
+    playerList: renderPlayers,
+    matchList: renderMatches,
+    eventList: renderEvents,
+    appearanceList: renderAppearances,
+  };
+
+  const renderer = renderers[id];
+  if (renderer) renderer();
+}
+
+function applyDataPanelFilter(id) {
+  refreshDataPanel(id);
+}
+
+function clearDataPanelFilter(id) {
+  const input = document.getElementById(`${id}Search`);
+  if (!input) return;
+  input.value = "";
+  localStorage.removeItem(`admin_filter_${id}`);
+  refreshDataPanel(id);
+  input.focus();
+}
+
+function initAdminDataPanels() {
+  for (const id of dataPanelIds) {
+    const panel = document.getElementById(id);
+    if (!panel || panel.dataset.collapsibleReady) continue;
+
+    const header = document.createElement("div");
+    header.className = "data-panel-header";
+
+    const title = document.createElement("span");
+    title.textContent = "数据列表";
+
+    const controls = document.createElement("div");
+    controls.className = "data-panel-controls";
+
+    const search = document.createElement("input");
+    search.id = `${id}Search`;
+    search.type = "search";
+    search.className = "data-panel-search";
+    search.placeholder = dataPanelSearchPlaceholders[id] || "搜索当前列表";
+    search.autocomplete = "off";
+    search.setAttribute("aria-label", search.placeholder);
+    search.value = localStorage.getItem(`admin_filter_${id}`) || "";
+
+    const count = document.createElement("span");
+    count.className = "data-panel-count small";
+    count.dataset.countFor = id;
+    count.textContent = "共 0 条";
+
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "secondary data-panel-clear";
+    clearButton.textContent = "清空筛选";
+    clearButton.addEventListener("click", () => {
+      localStorage.removeItem(`admin_filter_${id}`);
+      clearDataPanelFilter(id);
+    });
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary data-panel-toggle";
+    button.setAttribute("aria-controls", id);
+
+    controls.append(search, count, clearButton, button);
+    header.append(title, controls);
+    panel.parentNode.insertBefore(header, panel);
+    panel.classList.add("data-panel");
+    panel.dataset.collapsibleReady = "1";
+
+    search.addEventListener("input", () => {
+      localStorage.setItem(`admin_filter_${id}`, search.value);
+      refreshDataPanel(id);
+    });
+
+    button.addEventListener("click", () => setDataPanelCollapsed(id, !isDataPanelCollapsed(id)));
+    setDataPanelCollapsed(id, localStorage.getItem(`admin_panel_${id}`) === "collapsed");
+    applyDataPanelFilter(id);
+  }
+}
+
+function isDataPanelCollapsed(id) {
+  return document.getElementById(id)?.classList.contains("collapsed");
+}
+
+function setDataPanelCollapsed(id, collapsed) {
+  const panel = document.getElementById(id);
+  const button = document.querySelector(`[aria-controls="${id}"]`);
+  if (!panel || !button) return;
+
+  panel.classList.toggle("collapsed", collapsed);
+  button.textContent = collapsed ? "展开" : "折叠";
+  button.setAttribute("aria-expanded", String(!collapsed));
+  localStorage.setItem(`admin_panel_${id}`, collapsed ? "collapsed" : "expanded");
+
+  if (!collapsed) refreshDataPanel(id);
+}
+
+function saveKey() {
+  setAdminKey(document.getElementById("adminKey").value);
+  showNotice(document.getElementById("globalNotice"), "管理员密钥已保存到本地浏览器", "success");
+}
+
+function options(rows, valueKey, labelFn) {
+  return rows.map(row =>
+    `<option value="${row[valueKey]}">${escapeHtml(labelFn(row))}</option>`
+  ).join("");
+}
+
+function selectedMatch(selectId) {
+  return matches.find(m => m.match_id === Number(document.getElementById(selectId).value));
+}
+
+function playersForMatch(match) {
+  if (!match) return [];
+  return players.filter(p =>
+    p.team_id === match.home_team_id || p.team_id === match.away_team_id
+  );
+}
+
+async function loadReferenceData() {
+  [seasons, tournaments, teams, players, matches] = await Promise.all([
+    api("/seasons"),
+    api("/tournaments"),
+    api("/teams"),
+    api("/players"),
+    api("/matches"),
+  ]);
+
+  const teamOptions = options(teams, "team_id", t => t.team_name);
+  document.getElementById("playerTeam").innerHTML = teamOptions;
+  document.getElementById("homeTeam").innerHTML = teamOptions;
+  document.getElementById("awayTeam").innerHTML = teamOptions;
+
+  document.getElementById("matchSeason").innerHTML =
+    options(seasons, "season_id", s => s.season_name);
+  document.getElementById("matchTournament").innerHTML =
+    options(tournaments, "tournament_id", t => t.tournament_name);
+
+  const matchOptions = options(
+    matches,
+    "match_id",
+    m => `第${m.round_no}轮 ${m.home_team_name} vs ${m.away_team_name}`
+  );
+  document.getElementById("eventMatch").innerHTML = matchOptions;
+  document.getElementById("appearanceMatch").innerHTML = matchOptions;
+
+  renderSeasons();
+  renderTournaments();
+  renderTeams();
+  renderPlayers();
+  renderMatches();
+  refreshEventPlayers();
+  refreshAppearancePlayers();
+}
+
+function renderSeasons() {
+  const meta = filteredRows("seasonList", seasons, s => rowText([s.season_name, s.start_date, s.end_date]));
+  document.getElementById("seasonList").innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>名称</th><th>日期</th><th>操作</th></tr></thead>
+      <tbody>${meta.shownRows.map(s => `
+        <tr>
+          <td>${escapeHtml(s.season_name)}</td>
+          <td>${s.start_date} 至 ${s.end_date}</td>
+          <td>
+            <button class="secondary" onclick='editSeason(${JSON.stringify(s)})'>编辑</button>
+            <button class="danger" onclick="removeSeason(${s.season_id})">删除</button>
+          </td>
+        </tr>`).join("")}${tailMessage("seasonList", 3, meta)}
+      </tbody>
+    </table></div>`;
+}
+
+
+function editSeason(s) {
+  document.getElementById("seasonId").value = s.season_id;
+  document.getElementById("seasonName").value = s.season_name;
+  document.getElementById("seasonStart").value = String(s.start_date).slice(0, 10);
+  document.getElementById("seasonEnd").value = String(s.end_date).slice(0, 10);
+}
+function resetSeason() {
+  for (const id of ["seasonId","seasonName","seasonStart","seasonEnd"]) document.getElementById(id).value = "";
+}
+async function saveSeason() {
+  try {
+    const id = document.getElementById("seasonId").value;
+    const body = JSON.stringify({
+      season_name: document.getElementById("seasonName").value,
+      start_date: document.getElementById("seasonStart").value,
+      end_date: document.getElementById("seasonEnd").value,
+    });
+    await api(id ? `/seasons/${id}` : "/seasons", { method: id ? "PUT" : "POST", body });
+    resetSeason(); await loadReferenceData();
+  } catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+async function removeSeason(id) {
+  if (!confirm("确定删除赛季？有关联比赛时数据库会拒绝。")) return;
+  try { await api(`/seasons/${id}`, {method:"DELETE"}); await loadReferenceData(); }
+  catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+
+function renderTournaments() {
+  const meta = filteredRows("tournamentList", tournaments, t => rowText([t.tournament_name, t.organizer]));
+  document.getElementById("tournamentList").innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>赛事</th><th>组织方</th><th>操作</th></tr></thead>
+      <tbody>${meta.shownRows.map(t => `
+        <tr>
+          <td>${escapeHtml(t.tournament_name)}</td>
+          <td>${escapeHtml(t.organizer)}</td>
+          <td>
+            <button class="secondary" onclick='editTournament(${JSON.stringify(t)})'>编辑</button>
+            <button class="danger" onclick="removeTournament(${t.tournament_id})">删除</button>
+          </td>
+        </tr>`).join("")}${tailMessage("tournamentList", 3, meta)}
+      </tbody>
+    </table></div>`;
+}
+
+function editTournament(t) {
+  document.getElementById("tournamentId").value = t.tournament_id;
+  document.getElementById("tournamentName").value = t.tournament_name;
+  document.getElementById("organizer").value = t.organizer;
+}
+function resetTournament() {
+  for (const id of ["tournamentId","tournamentName","organizer"]) document.getElementById(id).value = "";
+}
+async function saveTournament() {
+  try {
+    const id = document.getElementById("tournamentId").value;
+    const body = JSON.stringify({
+      tournament_name: document.getElementById("tournamentName").value,
+      organizer: document.getElementById("organizer").value,
+    });
+    await api(id ? `/tournaments/${id}` : "/tournaments", { method: id ? "PUT" : "POST", body });
+    resetTournament(); await loadReferenceData();
+  } catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+async function removeTournament(id) {
+  if (!confirm("确定删除赛事？有关联比赛时数据库会拒绝。")) return;
+  try { await api(`/tournaments/${id}`, {method:"DELETE"}); await loadReferenceData(); }
+  catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+
+function renderTeams() {
+  const meta = filteredRows("teamList", teams, t => rowText([t.team_name, t.city, t.coach_name]));
+  document.getElementById("teamList").innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>球队</th><th>城市</th><th>操作</th></tr></thead>
+      <tbody>${meta.shownRows.map(t => `
+        <tr>
+          <td>${escapeHtml(t.team_name)}</td><td>${escapeHtml(t.city)}</td>
+          <td>
+            <button class="secondary" onclick='editTeam(${JSON.stringify(t)})'>编辑</button>
+            <button class="danger" onclick="removeTeam(${t.team_id})">删除</button>
+          </td>
+        </tr>`).join("")}${tailMessage("teamList", 3, meta)}
+      </tbody>
+    </table></div>`;
+}
+
+function editTeam(t) {
+  document.getElementById("teamId").value = t.team_id;
+  document.getElementById("teamName").value = t.team_name;
+  document.getElementById("teamCity").value = t.city;
+  document.getElementById("teamCoach").value = t.coach_name;
+}
+function resetTeam() {
+  for (const id of ["teamId","teamName","teamCity","teamCoach"]) document.getElementById(id).value = "";
+}
+async function saveTeam() {
+  try {
+    const id = document.getElementById("teamId").value;
+    const body = JSON.stringify({
+      team_name: document.getElementById("teamName").value,
+      city: document.getElementById("teamCity").value,
+      coach_name: document.getElementById("teamCoach").value,
+    });
+    await api(id ? `/teams/${id}` : "/teams", {method:id ? "PUT":"POST", body});
+    resetTeam(); await loadReferenceData();
+  } catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+async function removeTeam(id) {
+  if (!confirm("确定删除球队？存在球员或比赛时数据库会拒绝。")) return;
+  try { await api(`/teams/${id}`, {method:"DELETE"}); await loadReferenceData(); }
+  catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+
+function renderPlayers() {
+  const meta = filteredRows("playerList", players, p => rowText([p.team_name, p.number, p.player_name, p.position]));
+  document.getElementById("playerList").innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>球队</th><th>号码</th><th>球员</th><th>操作</th></tr></thead>
+      <tbody>${meta.shownRows.map(p => `
+        <tr>
+          <td>${escapeHtml(p.team_name)}</td><td>${p.number}</td><td>${escapeHtml(p.player_name)}</td>
+          <td>
+            <button class="secondary" onclick='editPlayer(${JSON.stringify(p)})'>编辑</button>
+            <button class="danger" onclick="removePlayer(${p.player_id})">删除</button>
+          </td>
+        </tr>`).join("")}${tailMessage("playerList", 4, meta)}
+      </tbody>
+    </table></div>`;
+}
+
+function editPlayer(p) {
+  document.getElementById("playerId").value = p.player_id;
+  document.getElementById("playerTeam").value = p.team_id;
+  document.getElementById("playerName").value = p.player_name;
+  document.getElementById("playerNumber").value = p.number;
+  document.getElementById("playerPosition").value = p.position;
+}
+function resetPlayer() {
+  document.getElementById("playerId").value = "";
+  document.getElementById("playerName").value = "";
+  document.getElementById("playerNumber").value = "";
+}
+async function savePlayer() {
+  try {
+    const id = document.getElementById("playerId").value;
+    const body = JSON.stringify({
+      team_id: Number(document.getElementById("playerTeam").value),
+      player_name: document.getElementById("playerName").value,
+      number: Number(document.getElementById("playerNumber").value),
+      position: document.getElementById("playerPosition").value,
+    });
+    await api(id ? `/players/${id}` : "/players", {method:id ? "PUT":"POST", body});
+    resetPlayer(); await loadReferenceData();
+  } catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+async function removePlayer(id) {
+  if (!confirm("确定删除球员？有关联事件或出场记录时数据库会拒绝。")) return;
+  try { await api(`/players/${id}`, {method:"DELETE"}); await loadReferenceData(); }
+  catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+
+function renderMatches() {
+  const meta = filteredRows("matchList", matches, m => rowText([m.round_no, m.home_team_name, m.away_team_name, m.match_date, m.home_score, m.away_score, m.status]));
+  document.getElementById("matchList").innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>轮次</th><th>比赛</th><th>时间</th><th>比分</th><th>操作</th></tr></thead>
+      <tbody>${meta.shownRows.map(m => `
+        <tr>
+          <td>${m.round_no}</td>
+          <td>${escapeHtml(m.home_team_name)} vs ${escapeHtml(m.away_team_name)}</td>
+          <td>${formatDate(m.match_date)}</td>
+          <td>${m.home_score} : ${m.away_score}</td>
+          <td>
+            <button class="secondary" onclick='editMatch(${JSON.stringify(m)})'>编辑</button>
+            <button class="danger" onclick="removeMatch(${m.match_id})">删除</button>
+          </td>
+        </tr>`).join("")}${tailMessage("matchList", 5, meta)}
+      </tbody>
+    </table></div>`;
+}
+
+function localDateTime(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function editMatch(m) {
+  document.getElementById("matchId").value = m.match_id;
+  document.getElementById("matchSeason").value = m.season_id;
+  document.getElementById("matchTournament").value = m.tournament_id;
+  document.getElementById("matchRound").value = m.round_no;
+  document.getElementById("matchDate").value = localDateTime(m.match_date);
+  document.getElementById("homeTeam").value = m.home_team_id;
+  document.getElementById("awayTeam").value = m.away_team_id;
+  document.getElementById("matchStatus").value = m.status;
+}
+function resetMatch() {
+  document.getElementById("matchId").value = "";
+  document.getElementById("matchRound").value = "";
+  document.getElementById("matchDate").value = "";
+  document.getElementById("matchStatus").value = "scheduled";
+}
+async function saveMatch() {
+  try {
+    const id = document.getElementById("matchId").value;
+    const body = JSON.stringify({
+      season_id: Number(document.getElementById("matchSeason").value),
+      tournament_id: Number(document.getElementById("matchTournament").value),
+      round_no: Number(document.getElementById("matchRound").value),
+      match_date: document.getElementById("matchDate").value,
+      home_team_id: Number(document.getElementById("homeTeam").value),
+      away_team_id: Number(document.getElementById("awayTeam").value),
+      status: document.getElementById("matchStatus").value,
+    });
+    await api(id ? `/matches/${id}` : "/matches", {method:id ? "PUT":"POST", body});
+    resetMatch(); await loadReferenceData();
+  } catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+async function removeMatch(id) {
+  if (!confirm("删除比赛会同时删除其事件和出场记录，确定继续？")) return;
+  try { await api(`/matches/${id}`, {method:"DELETE"}); await loadReferenceData(); }
+  catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+
+async function refreshEventPlayers() {
+  const match = selectedMatch("eventMatch");
+  const rows = playersForMatch(match);
+  const html = options(rows, "player_id", p => `${p.team_name} - ${p.player_name}`);
+  document.getElementById("eventPlayer").innerHTML = html;
+  document.getElementById("relatedPlayer").innerHTML = '<option value="">无</option>' + html;
+  await renderEvents();
+}
+async function renderEvents() {
+  const matchId = Number(document.getElementById("eventMatch").value);
+  if (!matchId) {
+    setPanelCount("eventList", 0, 0, 0);
+    return;
+  }
+  const rows = await api(`/matches/${matchId}/events`);
+  const meta = filteredRows("eventList", rows, e => rowText([e.minute, e.stoppage_minute, e.player_name, e.related_player_name, e.event_type, eventLabel(e)]));
+  document.getElementById("eventList").innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>时间</th><th>事件</th><th>操作</th></tr></thead>
+      <tbody>${meta.shownRows.map(e => `
+        <tr>
+          <td>${e.minute}${e.stoppage_minute ? `+${e.stoppage_minute}` : ""}'</td>
+          <td>${eventLabel(e)}</td>
+          <td>
+            <button class="secondary" onclick='editEvent(${JSON.stringify(e)})'>编辑</button>
+            <button class="danger" onclick="removeEvent(${e.event_id})">删除</button>
+          </td>
+        </tr>`).join("")}${tailMessage("eventList", 3, meta)}
+      </tbody>
+    </table></div>`;
+}
+
+function editEvent(e) {
+  document.getElementById("eventId").value = e.event_id;
+  document.getElementById("eventPlayer").value = e.player_id;
+  document.getElementById("relatedPlayer").value = e.related_player_id || "";
+  document.getElementById("eventType").value = e.event_type;
+  document.getElementById("eventMinute").value = e.minute;
+  document.getElementById("eventStoppage").value = e.stoppage_minute;
+}
+function resetEvent() {
+  document.getElementById("eventId").value = "";
+  document.getElementById("relatedPlayer").value = "";
+  document.getElementById("eventMinute").value = "";
+  document.getElementById("eventStoppage").value = 0;
+}
+async function saveEvent() {
+  try {
+    const id = document.getElementById("eventId").value;
+    const matchId = Number(document.getElementById("eventMatch").value);
+    const body = JSON.stringify({
+      player_id: Number(document.getElementById("eventPlayer").value),
+      related_player_id: document.getElementById("relatedPlayer").value || null,
+      event_type: document.getElementById("eventType").value,
+      minute: Number(document.getElementById("eventMinute").value),
+      stoppage_minute: Number(document.getElementById("eventStoppage").value || 0),
+    });
+    await api(id ? `/events/${id}` : `/matches/${matchId}/events`, {method:id ? "PUT":"POST", body});
+    resetEvent(); await loadReferenceData();
+  } catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+async function removeEvent(id) {
+  if (!confirm("确定删除事件？比分和统计将自动重算。")) return;
+  try { await api(`/events/${id}`, {method:"DELETE"}); await loadReferenceData(); }
+  catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+
+async function refreshAppearancePlayers() {
+  const match = selectedMatch("appearanceMatch");
+  const rows = playersForMatch(match);
+  document.getElementById("appearancePlayer").innerHTML =
+    options(rows, "player_id", p => `${p.team_name} - ${p.player_name}`);
+  await renderAppearances();
+}
+async function renderAppearances() {
+  const matchId = Number(document.getElementById("appearanceMatch").value);
+  if (!matchId) {
+    setPanelCount("appearanceList", 0, 0, 0);
+    return;
+  }
+  const rows = await api(`/matches/${matchId}/appearances`);
+  const meta = filteredRows("appearanceList", rows, a => rowText([a.team_name, a.player_name, a.minute_on, a.minute_off, a.is_starting ? "首发" : "替补"]));
+  document.getElementById("appearanceList").innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>球队</th><th>球员</th><th>时间</th><th>操作</th></tr></thead>
+      <tbody>${meta.shownRows.map(a => `
+        <tr>
+          <td>${escapeHtml(a.team_name)}</td>
+          <td>${escapeHtml(a.player_name)}</td>
+          <td>${a.minute_on}'–${a.minute_off}'</td>
+          <td>
+            <button class="secondary" onclick='editAppearance(${JSON.stringify(a)})'>编辑</button>
+            <button class="danger" onclick="removeAppearance(${a.appearance_id})">删除</button>
+          </td>
+        </tr>`).join("")}${tailMessage("appearanceList", 4, meta)}
+      </tbody>
+    </table></div>`;
+}
+
+function editAppearance(a) {
+  document.getElementById("appearanceId").value = a.appearance_id;
+  document.getElementById("appearancePlayer").value = a.player_id;
+  document.getElementById("isStarting").value = a.is_starting ? "1" : "0";
+  document.getElementById("minuteOn").value = a.minute_on;
+  document.getElementById("minuteOff").value = a.minute_off;
+}
+function resetAppearance() {
+  document.getElementById("appearanceId").value = "";
+  document.getElementById("isStarting").value = "1";
+  document.getElementById("minuteOn").value = 0;
+  document.getElementById("minuteOff").value = 90;
+}
+async function saveAppearance() {
+  try {
+    const id = document.getElementById("appearanceId").value;
+    const matchId = Number(document.getElementById("appearanceMatch").value);
+    const body = JSON.stringify({
+      player_id: Number(document.getElementById("appearancePlayer").value),
+      is_starting: document.getElementById("isStarting").value === "1",
+      minute_on: Number(document.getElementById("minuteOn").value),
+      minute_off: Number(document.getElementById("minuteOff").value),
+    });
+    await api(id ? `/appearances/${id}` : `/matches/${matchId}/appearances`, {method:id ? "PUT":"POST", body});
+    resetAppearance(); await loadReferenceData();
+  } catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+async function removeAppearance(id) {
+  if (!confirm("确定删除出场记录？")) return;
+  try { await api(`/appearances/${id}`, {method:"DELETE"}); await loadReferenceData(); }
+  catch (e) { showNotice(document.getElementById("globalNotice"), e.message, "error"); }
+}
+
+async function recalculate() {
+  try {
+    const result = await api("/admin/recalculate", {
+      method: "POST",
+      body: JSON.stringify({season_id:1, tournament_id:1}),
+    });
+    showNotice(document.getElementById("globalNotice"),
+      `重算完成：积分榜 ${result.standing_rows} 行，球员统计 ${result.player_stat_rows} 行`,
+      "success");
+    await loadReferenceData();
+  } catch (e) {
+    showNotice(document.getElementById("globalNotice"), e.message, "error");
+  }
+}
+
+document.getElementById("adminKey").value = adminKey();
+initAdminDataPanels();
+loadReferenceData().catch(e =>
+  showNotice(document.getElementById("globalNotice"), e.message, "error")
+);
+</script>
+</body>
+</html>

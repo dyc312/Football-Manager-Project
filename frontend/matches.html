@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>赛程与赛果</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/index.html">英超赛事信息管理系统</a>
+  <a href="/index.html">球队</a>
+  <a href="/players.html">球员</a>
+  <a href="/matches.html">赛程赛果</a>
+  <a href="/standings.html">积分榜</a>
+  <a href="/scorers.html">射手榜</a>
+  <a href="/player_stats.html">球员统计</a>
+</nav>
+<main class="container">
+  <h1 class="page-title">赛程与赛果</h1>
+  <div class="toolbar card">
+    <div class="field">
+      <label>轮次</label>
+      <input id="round" type="number" min="1">
+    </div>
+    <div class="field">
+      <label>球队</label>
+      <select id="team"><option value="">全部球队</option></select>
+    </div>
+    <div class="field">
+      <label>状态</label>
+      <select id="status">
+        <option value="">全部状态</option>
+        <option value="scheduled">未开始</option>
+        <option value="live">进行中</option>
+        <option value="finished">已结束</option>
+        <option value="postponed">延期</option>
+        <option value="cancelled">取消</option>
+      </select>
+    </div>
+    <button id="search">筛选</button>
+  </div>
+  <div id="notice"></div>
+  <div id="table" class="table-wrap"></div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+async function initTeams() {
+  const teams = await api("/teams");
+  document.getElementById("team").innerHTML += teams.map(
+    t => `<option value="${t.team_id}">${escapeHtml(t.team_name)}</option>`
+  ).join("");
+}
+
+async function loadMatches() {
+  const params = new URLSearchParams();
+  const round = document.getElementById("round").value;
+  const team = document.getElementById("team").value;
+  const status = document.getElementById("status").value;
+  if (round) params.set("round_no", round);
+  if (team) params.set("team_id", team);
+  if (status) params.set("status", status);
+
+  try {
+    const rows = await api(`/matches?${params.toString()}`);
+    document.getElementById("table").innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>轮次</th><th>比赛时间</th><th>主队</th>
+            <th>比分</th><th>客队</th><th>状态</th><th>详情</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(m => `
+            <tr>
+              <td>${m.round_no}</td>
+              <td>${formatDate(m.match_date)}</td>
+              <td><a href="/team_detail.html?id=${m.home_team_id}">${escapeHtml(m.home_team_name)}</a></td>
+              <td><strong>${m.status === "scheduled" ? "vs" : `${m.home_score} : ${m.away_score}`}</strong></td>
+              <td><a href="/team_detail.html?id=${m.away_team_id}">${escapeHtml(m.away_team_name)}</a></td>
+              <td>${statusBadge(m.status)}</td>
+              <td><a href="/match_detail.html?id=${m.match_id}">查看详情</a></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+    document.getElementById("notice").innerHTML = rows.length ? "" :
+      '<div class="notice info">没有符合条件的比赛。</div>';
+  } catch (error) {
+    showNotice(document.getElementById("notice"), error.message, "error");
+  }
+}
+
+document.getElementById("search").addEventListener("click", loadMatches);
+Promise.resolve(initTeams()).then(loadMatches);
+</script>
+</body>
+</html>
